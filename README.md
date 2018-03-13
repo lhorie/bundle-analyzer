@@ -2,6 +2,8 @@
 
 Displays a visualization of code sizes by file based on source map information.
 
+![Bundle analyzer in action](https://raw.githubusercontent.com/wiki/lhorie/bundle-analyzer/images/bundle-analyzer.gif)
+
 File sizes displayed by this tool reflect size of transpiled minified bundled code, as calculated from source maps. Note that this tool does not take compression (i.e. gzip/brotli) into account. Compression profiles vary depending on the compression algorithm and aggressiveness setting, thus cannot be easily calculated with accuracy. For the purposes of optimization work, making an assumption that compression is applied evenly across the bundle is usually good enough.
 
 ---
