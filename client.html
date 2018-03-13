@@ -77,6 +77,7 @@
         const option = document.createElement('option');
         option.textContent = d.name;
         option.value = i;
+        if (i === index) option.selected = true;
         bundles.appendChild(option);
       });
 
