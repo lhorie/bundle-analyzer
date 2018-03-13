@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Package sizes</title>
+  <style>
+    html,
+    body {
+      background: radial-gradient(ellipse at center, #ffe6ad 0%, #c98e18 100%);
+      height: 100%;
+      width: 100%;
+      font-family: Arial;
+      font-size: 14px;
+    }
+
+    svg {
+      font-family: Sans-serif;
+      font-size: 8px;
+    }
+
+    aside {
+      position: fixed;
+    }
+
+    .slice {
+      cursor: pointer;
+    }
+
+    .slice .main-arc {
+      stroke: #fff;
+      stroke-width: 1px;
+    }
+
+    .slice .hidden-arc {
+      fill: none;
+    }
+
+    .slice text {
+      pointer-events: none;
+      dominant-baseline: middle;
+      text-anchor: middle;
+    }
+  </style>
+</head>
+
+<body>
+  <aside>
+    <h3>Code size breakdown by bundle (via source maps)</h3>
+    <p>
+      <select id="bundles"></select>
+    </p>
+    <p>Click on colored slices to zoom in. Click the middle circle to zoom out.</p>
+    <p>
+      <a href="https://github.com/lhorie/bundle-analyzer#ways-to-decrease-file-size">Click here to read about ways to reduce file size</a>
+    </p>
+  </aside>
+  <script src='d3.js'></script>
+  <script>
+    // data
+    let [
+      index = 0,
+      x0 = 0,
+      x1 = 1,
+      y0 = 0,
+      y1 = 1
+    ] = location.hash.slice(1).split('/').filter(s => s !== '').map(Number);
+    let data;
+
+    // controller
+    const source = new EventSource("/_sse");
+    source.addEventListener("message", function (event) {
+      data = JSON.parse(event.data);
+
+      bundles.textContent = '';
+      data.forEach((d, i) => {
+        const option = document.createElement('option');
+        option.textContent = d.name;
+        option.value = i;
+        bundles.appendChild(option);
+      });
+
+      redraw(data, index);
+    }, false);
+
+    const bundles = document.getElementById('bundles');
+    bundles.addEventListener('change', e => {
+      index = parseInt(e.target.value);
+      x0 = y0 = 0;
+      x1 = y1 = 1;
+      redraw(data, index);
+    });
+
+    // view
+    function redraw(data, index) {
+      history.pushState(null, null, `#${index}/${x0}/${x1}/${y0}/${y1}`);
+
+      let root = data[index];
+
+      const width = window.innerWidth,
+        height = window.innerHeight,
+        maxRadius = (Math.min(width, height) / 2) - 5;
+
+      const formatNumber = d3.format(',d');
+
+      const x = d3.scaleLinear()
+        .range([0, 2 * Math.PI])
+        .clamp(true);
+
+      const y = d3.scaleSqrt()
+        .range([maxRadius * .1, maxRadius]);
+
+      const color = d3.scaleOrdinal(d3.schemeCategory20);
+
+      const partition = d3.partition();
+
+      const arc = d3.arc()
+        .startAngle(d => x(d.x0))
+        .endAngle(d => x(d.x1))
+        .innerRadius(d => Math.max(0, y(d.y0)))
+        .outerRadius(d => Math.max(0, y(d.y1)));
+
+      const middleArcLine = d => {
+        const halfPi = Math.PI / 2;
+        const angles = [x(d.x0) - halfPi, x(d.x1) - halfPi];
+        const r = Math.max(0, (y(d.y0) + y(d.y1)) / 2);
+
+        const middleAngle = (angles[1] + angles[0]) / 2;
+        const invertDirection = middleAngle > 0 && middleAngle < Math.PI; // On lower quadrants write text ccw
+        if (invertDirection) { angles.reverse(); }
+
+        const path = d3.path();
+        path.arc(0, 0, r, angles[0], angles[1], invertDirection);
+        return path.toString();
+      };
+
+      const textFits = d => {
+        const CHAR_SPACE = 4;
+
+        const deltaAngle = x(d.x1) - x(d.x0);
+        const r = Math.max(0, (y(d.y0) + y(d.y1)) / 2);
+        const perimeter = r * deltaAngle;
+
+        return label(d).length * CHAR_SPACE < perimeter;
+      };
+
+      d3.select("svg").remove();
+
+      const svg = d3.select('body').append('svg')
+        .style('width', '100vw')
+        .style('height', '100vh')
+        .attr('viewBox', `${-width / 2} ${-height / 2} ${width} ${height}`)
+        .on('click', () => focusOn({ x0, x1, y0, y1 })); // Reset zoom on canvas click
+
+      root = d3.hierarchy(root);
+      root.sum(d => d.size);
+
+      const slice = svg.selectAll('g.slice')
+        .data(partition(root).descendants());
+
+      slice.exit().remove();
+
+      const newSlice = slice.enter()
+        .append('g').attr('class', 'slice')
+        .on('click', d => {
+          d3.event.stopPropagation();
+          focusOn(d);
+        });
+
+      newSlice.append('title')
+        .text(label);
+
+      newSlice.append('path')
+        .attr('class', 'main-arc')
+        .style('fill', d => color((d.children ? d : d.parent).data.name))
+        .attr('d', arc);
+
+      newSlice.append('path')
+        .attr('class', 'hidden-arc')
+        .attr('id', (_, i) => `hiddenArc${i}`)
+        .attr('d', middleArcLine);
+
+      const text = newSlice.append('text')
+        .attr('display', d => textFits(d) ? null : 'none');
+
+      // Add white contour
+      text.append('textPath')
+        .attr('startOffset', '50%')
+        .attr('xlink:href', (_, i) => `#hiddenArc${i}`)
+        .text(label)
+        .style('fill', 'none')
+        .style('stroke', '#fff')
+        .style('stroke-width', 2)
+        .style('stroke-linejoin', 'round');
+
+      text.append('textPath')
+        .attr('startOffset', '50%')
+        .attr('xlink:href', (_, i) => `#hiddenArc${i}`)
+        .text(label);
+
+      function focusOn(d = { x0: 0, x1: 1, y0: 0, y1: 1 }) {
+        // Reset to top-level if no data point specified
+        ({ x0 = 0, x1 = 1, y0 = 0, y1 = 1, duration = 500 } = d);
+        history.pushState(null, null, `#${index}/${x0}/${x1}/${y0}/${y1}`);
+
+        const transition = svg.transition()
+          .duration(duration)
+          .tween('scale', () => {
+            const xd = d3.interpolate(x.domain(), [d.x0, d.x1]),
+              yd = d3.interpolate(y.domain(), [d.y0, 1]);
+            return t => { x.domain(xd(t)); y.domain(yd(t)); };
+          });
+
+        transition.selectAll('path.main-arc')
+          .attrTween('d', d => () => arc(d));
+
+        transition.selectAll('path.hidden-arc')
+          .attrTween('d', d => () => middleArcLine(d));
+
+        transition.selectAll('text')
+          .attrTween('display', d => () => textFits(d) ? null : 'none');
+
+        moveStackToFront(d);
+
+        //
+
+        function moveStackToFront(elD) {
+          svg.selectAll('.slice').filter(d => d === elD)
+            .each(function (d) {
+              this.parentNode.appendChild(this);
+              if (d.parent) { moveStackToFront(d.parent); }
+            })
+        }
+      }
+
+      function label(d) {
+        return `${d.data.name} - ${format(sizeOf(d.data))}`;
+      }
+
+      function sizeOf(data) {
+        return data.size || data.children.reduce((n, c) => n + sizeOf(c), 0);
+      }
+
+      function format(n) {
+        return n.toString().replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+      }
+
+      focusOn({ x0, x1, y0, y1, duration: 0 });
+    };
+  </script>
+</body>
+
+</html>
