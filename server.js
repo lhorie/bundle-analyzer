@@ -11,10 +11,6 @@ function start({dir, port = 9000}) {
     const html = __dirname + '/client.html';
     fs.createReadStream(html).pipe(res);
   });
-  app.get('/d3.js', (req, res) => {
-    const js = __dirname + '/node_modules/d3/build/d3.min.js';
-    fs.createReadStream(js).pipe(res);
-  });
 
   app.get('/_sse', async (req, res) => {
     connections.add(res);
