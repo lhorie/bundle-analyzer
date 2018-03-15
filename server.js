@@ -29,7 +29,7 @@ function start({dir, port = 9000}) {
   });
   open(`http://localhost:${port}`);
 
-  async function update(data) {
+  async function update() {
     const data = await getSizes(dir);
     for (const res of connections) {
       res.write('data: ' + JSON.stringify(data) + '\n\n');
