@@ -7,13 +7,15 @@ const readDir = util.promisify(fs.readdir);
 const readFile = util.promisify(fs.readFile);
 
 module.exports = async function(dir) {
-  const paths = await readDir(dir);
+  const paths = await readDir(dir).catch(() => []);
   return (await Promise.all([
     ...paths.map(async p => {
       if (p.match(/\.js$/)) {
         return {
           name: p,
-          children: normalize(groupByHierarchy(await getSizesByFile(dir, p))),
+          children: normalize(
+            groupByHierarchy(await getSizesByFile(dir, p).catch(() => []))
+          ),
         };
       }
     }),
@@ -73,8 +75,9 @@ function groupByHierarchy(map) {
   }
   while (true) {
     const keys = Object.keys(groups);
-    if (keys.length === 1) groups = groups[keys[0]];
-    else break;
+    if (keys.length === 1 && typeof groups[keys[0]] !== 'number') {
+      groups = groups[keys[0]];
+    } else break;
   }
   return groups;
 }

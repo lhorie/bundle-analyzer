@@ -16,7 +16,7 @@
 
     svg {
       font-family: Sans-serif;
-      font-size: 8px;
+      font-size: 10px;
     }
 
     aside {
@@ -58,45 +58,56 @@
   <script src='https://d3js.org/d3.v4.min.js'></script>
   <script>
     // data
+    let options = {}
     let [
-      index = 0,
+      selected = '',
       x0 = 0,
       x1 = 1,
       y0 = 0,
       y1 = 1
-    ] = location.hash.slice(1).split('/').filter(s => s !== '').map(Number);
+    ] = location.hash
+      .slice(1)
+      .split('/')
+      .filter(s => s !== '')
+      .map((s, i) => i === 0 ? s : Number(s));
     let data;
 
     // controller
+    function unhash(s) {
+      return s.replace(/-[a-f0-9]+?\.js/, '');
+    }
+
     const source = new EventSource("/_sse");
     source.addEventListener("message", function (event) {
       data = JSON.parse(event.data);
 
       bundles.textContent = '';
+      options = {};
       data.forEach((d, i) => {
         const option = document.createElement('option');
-        option.textContent = d.name;
-        option.value = i;
-        if (i === index) option.selected = true;
+        const name = option.textContent = option.value = unhash(d.name);
+        options[name] = i;
+        if (name === selected) option.selected = true;
         bundles.appendChild(option);
       });
+      if (!options[selected]) selected = unhash(data[0].name);
 
-      redraw(data, index);
+      redraw(data, selected);
     }, false);
 
     const bundles = document.getElementById('bundles');
     bundles.addEventListener('change', e => {
-      index = parseInt(e.target.value);
+      selected = e.target.value;
       x0 = y0 = 0;
       x1 = y1 = 1;
-      redraw(data, index);
+      redraw(data, selected);
     });
 
     // view
-    function redraw(data, index) {
-      history.pushState(null, null, `#${index}/${x0}/${x1}/${y0}/${y1}`);
+    function redraw(data, selected) {
+      history.pushState(null, null, `#${selected}/${x0}/${x1}/${y0}/${y1}`);
 
-      let root = data[index];
+      let root = data[options[selected]];
 
       const width = window.innerWidth,
         height = window.innerHeight,
@@ -202,7 +213,7 @@
       function focusOn(d = { x0: 0, x1: 1, y0: 0, y1: 1 }) {
         // Reset to top-level if no data point specified
         ({ x0 = 0, x1 = 1, y0 = 0, y1 = 1, duration = 500 } = d);
-        history.pushState(null, null, `#${index}/${x0}/${x1}/${y0}/${y1}`);
+        history.pushState(null, null, `#${selected}/${x0}/${x1}/${y0}/${y1}`);
 
         const transition = svg.transition()
           .duration(duration)
