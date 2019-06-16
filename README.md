@@ -15,7 +15,7 @@ File sizes displayed by this tool reflect size of transpiled minified bundled co
 npm install bundle-analyzer -g
 
 # Yarn
-yarn add bundle-analyzer --global
+yarn global add bundle-analyzer
 ```
 
 ---
